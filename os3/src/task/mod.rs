@@ -54,6 +54,7 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            syscall_count: [0; MAX_SYSCALL_NUM],
         }; MAX_APP_NUM];
         for (i, t) in tasks.iter_mut().enumerate().take(num_app) {
             t.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -137,6 +138,19 @@ impl TaskManager {
     }
 
     // LAB1: Try to implement your function to update or get task info!
+    fn update_task_info(&self , syscall_id:usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_count[syscall_id] = inner.tasks[current].syscall_count[syscall_id]+ 1;
+        
+    }
+
+    fn git_task_info(&self) -> [u32; MAX_SYSCALL_NUM]{
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let sys_count:[u32; MAX_SYSCALL_NUM] = inner.tasks[current].syscall_count;
+        sys_count
+    }
 }
 
 /// Run the first task in task list.
@@ -174,3 +188,11 @@ pub fn exit_current_and_run_next() {
 
 // LAB1: Public functions implemented here provide interfaces.
 // You may use TASK_MANAGER member functions to handle requests.
+pub fn update_task_info(syscall_id : usize) {
+    TASK_MANAGER.update_task_info(syscall_id);
+}
+
+pub fn git_task_info() -> [u32; MAX_SYSCALL_NUM]{
+    let num:[u32; MAX_SYSCALL_NUM] = TASK_MANAGER.git_task_info();
+    num
+}
