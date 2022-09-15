@@ -9,6 +9,7 @@ pub struct TaskControlBlock {
     pub task_cx: TaskContext,
     // LAB1: Add whatever you need about the Task.
     pub syscall_count: [u32; MAX_SYSCALL_NUM],
+    pub first_time: usize,
 }
 
 #[derive(Copy, Clone, PartialEq)]

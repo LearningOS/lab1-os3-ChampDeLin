@@ -17,6 +17,7 @@ mod task;
 use crate::config::{MAX_APP_NUM, MAX_SYSCALL_NUM};
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
+use crate::timer::{get_time, get_time_us};
 use lazy_static::*;
 pub use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
@@ -55,6 +56,7 @@ lazy_static! {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
             syscall_count: [0; MAX_SYSCALL_NUM],
+            first_time : 0,
         }; MAX_APP_NUM];
         for (i, t) in tasks.iter_mut().enumerate().take(num_app) {
             t.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -81,6 +83,7 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let task0 = &mut inner.tasks[0];
         task0.task_status = TaskStatus::Running;
+        task0.first_time = get_time() as usize;
         let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
         drop(inner);
         let mut _unused = TaskContext::zero_init();
@@ -126,11 +129,15 @@ impl TaskManager {
             inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
+            if inner.tasks[current].first_time == 0{
+                inner.tasks[current].first_time = get_time_us()/1000;
+            }
             drop(inner);
             // before this, we should drop local variables that must be dropped manually
             unsafe {
                 __switch(current_task_cx_ptr, next_task_cx_ptr);
             }
+            
             // go back to user mode
         } else {
             panic!("All applications completed!");
@@ -150,6 +157,13 @@ impl TaskManager {
         let current = inner.current_task;
         let sys_count:[u32; MAX_SYSCALL_NUM] = inner.tasks[current].syscall_count;
         sys_count
+    }
+
+    fn git_task_time_info(&self) -> usize{
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let sys_init_time:usize = inner.tasks[current].first_time;
+        sys_init_time
     }
 }
 
@@ -194,5 +208,10 @@ pub fn update_task_info(syscall_id : usize) {
 
 pub fn git_task_info() -> [u32; MAX_SYSCALL_NUM]{
     let num:[u32; MAX_SYSCALL_NUM] = TASK_MANAGER.git_task_info();
+    num
+}
+
+pub fn git_task_time_info() -> usize{
+    let num:usize = TASK_MANAGER.git_task_time_info();
     num
 }
